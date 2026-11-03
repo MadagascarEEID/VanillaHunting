@@ -1,0 +1,1136 @@
+---
+title: "Vanilla"
+output: html_document
+date: "2025-05-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Load packages and data}
+library(tidyverse)
+library(ggpubr)
+library(lavaan)
+library(semPlot)
+library(DiagrammeR)
+
+#survey_dat <- read.csv("~/Downloads/Survey_Animal_Interaction-3.csv")
+#metadata <- read.csv("~/Documents/Manuscripts/SAVA_Network/Data/Survey_Demographic_Health.csv")
+
+metadata$material_wall_index <- 0
+metadata$material_wall_index[is.na(metadata$material_wall)] <- NA
+metadata$material_wall_index[metadata$material_wall =="bamboo"] <- 0
+metadata$material_wall_index[metadata$material_wall =="rafia"] <- 0
+metadata$material_wall_index[metadata$material_wall =="ravenala"] <- 0
+metadata$material_wall_index[metadata$material_wall =="mud"] <- 0
+metadata$material_wall_index[metadata$material_wall =="compacted_earth"] <- 0
+metadata$material_wall_index[metadata$material_wall =="wood_planks"] <- 1
+metadata$material_wall_index[metadata$material_wall =="brick_unfired"] <- 2
+metadata$material_wall_index[metadata$material_wall =="brick_fired"] <- 2
+metadata$material_wall_index[metadata$material_wall =="metal_sheets"] <- 3
+metadata$material_wall_index[metadata$material_wall =="cement"] <- 4
+
+# roof construction
+metadata$material_roof_index <- 0
+metadata$material_roof_index[is.na(metadata$material_roof)] <- NA
+metadata$material_roof_index[metadata$material_roof=="bamboo"] <- 0
+metadata$material_roof_index[metadata$material_roof=="thatch"] <- 0
+metadata$material_roof_index[metadata$material_roof=="metal_sheets"] <- 1
+metadata$material_roof_index[metadata$material_roof=="cement"] <- 2
+
+# floor construction
+metadata$material_floor_index <- 0
+metadata$material_floor_index[is.na(metadata$material_floor)] <- NA
+metadata$material_floor_index[metadata$material_floor=="dirt"] <- 0
+metadata$material_floor_index[metadata$material_floor=="bamboo"] <- 0
+metadata$material_floor_index[metadata$material_floor=="rafia"] <- 0
+metadata$material_floor_index[metadata$material_floor=="ravinala"] <- 0
+metadata$material_floor_index[metadata$material_floor=="wood_planks"] <- 1
+metadata$material_floor_index[metadata$material_floor=="cement"] <- 02
+
+# household SOL index
+metadata$house_sol <- metadata$material_wall_index + metadata$material_roof_index + metadata$material_floor_index
+
+#################################
+## Durable Commercial Goods Index
+#################################
+
+# change "Yes" responses to 1s
+metadata$own_cellphone[metadata$own_cellphone=="Yes"] <- 1
+metadata$own_cellphone[metadata$own_cellphone!=1] <- 0
+metadata$own_cellphone <- as.numeric(metadata$own_cellphone)
+
+metadata$own_tv[metadata$own_tv=="Yes"] <- 1
+metadata$own_tv[metadata$own_tv!=1] <- 0
+metadata$own_tv <- as.numeric(metadata$own_tv)
+
+metadata$own_bicycle[metadata$own_bicycle=="Yes"] <- 1
+metadata$own_bicycle[metadata$own_bicycle!=1] <- 0
+metadata$own_bicycle <- as.numeric(metadata$own_bicycle)
+
+metadata$own_refrigerator[metadata$own_refrigerator=="Yes"] <- 1
+metadata$own_refrigerator[metadata$own_refrigerator!=1] <- 0
+metadata$own_refrigerator <- as.numeric(metadata$own_refrigerator)
+
+metadata$own_motorcycle[metadata$own_motorcycle=="Yes"] <- 1
+metadata$own_motorcycle[metadata$own_motorcycle!=1] <- 0
+metadata$own_motorcycle <- as.numeric(metadata$own_motorcycle)
+
+metadata$own_computer[metadata$own_computer=="Yes"] <- 1
+metadata$own_computer[metadata$own_computer!=1] <- 0
+metadata$own_computer <- as.numeric(metadata$own_computer)
+
+metadata$own_generator[metadata$own_generator=="Yes"] <- 1
+metadata$own_generator[metadata$own_generator!=1] <- 0
+metadata$own_generator <- as.numeric(metadata$own_generator)
+  
+metadata$commercial_goods <- metadata$own_cellphone + metadata$own_tv + metadata$own_bicycle + metadata$own_refrigerator + metadata$own_motorcycle + metadata$own_computer + metadata$own_generator
+
+metadata$log_commercial <- log(metadata$commercial_goods+1)
+
+survey_dat2 <- survey_dat %>% left_join(metadata, by = "social_netid")
+
+survey_dat2_test <- survey_dat2 %>% dplyr::select(house_sol, commercial_goods, gender, age, crops_vanilla, village)%>%drop_na()
+
+```
+
+```{r Clean Data}
+
+#Make sure season is a factor
+survey_dat2$season <- as.character(survey_dat2$season)
+
+#Generate hunting index
+
+survey_dat2$hunted_trapped_bush_pigs[survey_dat2$hunted_trapped_bush_pigs=="No"]<- 0
+survey_dat2$hunted_trapped_bush_pigs[survey_dat2$hunted_trapped_bush_pigs=="Yes"] <- 1
+
+survey_dat2$hunted_trapped_carnivores[survey_dat2$hunted_trapped_carnivores=="No"]<- 0
+survey_dat2$hunted_trapped_carnivores[survey_dat2$hunted_trapped_carnivores=="Yes"] <- 1
+
+survey_dat2$hunted_trapped_wild_birds[survey_dat2$hunted_trapped_wild_birds=="No"]<- 0
+survey_dat2$hunted_trapped_wild_birds[survey_dat2$hunted_trapped_wild_birds=="Yes"] <- 1
+
+survey_dat2$hunted_trapped_tenrecs[survey_dat2$hunted_trapped_tenrecs=="No"]<- 0
+survey_dat2$hunted_trapped_tenrecs[survey_dat2$hunted_trapped_tenrecs=="Yes"] <- 1
+
+survey_dat2$hunted_trapped_lemurs[survey_dat2$hunted_trapped_lemurs=="No"]<- 0
+survey_dat2$hunted_trapped_lemurs[survey_dat2$hunted_trapped_lemurs=="Yes"] <- 1
+
+survey_dat2$hunted_trapped_bush_pigs<- as.numeric(survey_dat2$hunted_trapped_bush_pigs)
+survey_dat2$hunted_trapped_wild_birds<- as.numeric(survey_dat2$hunted_trapped_wild_birds)
+survey_dat2$hunted_trapped_carnivores<- as.numeric(survey_dat2$hunted_trapped_carnivores)
+survey_dat2$hunted_trapped_tenrecs<- as.numeric(survey_dat2$hunted_trapped_tenrecs)
+survey_dat2$hunted_trapped_lemurs<- as.numeric(survey_dat2$hunted_trapped_lemurs)
+
+survey_dat2$hunted_trapped <- as.integer(
+  survey_dat2$hunted_trapped_bush_pigs == 1 |
+  survey_dat2$hunted_trapped_lemurs == 1 |
+  survey_dat2$hunted_trapped_carnivores == 1 |
+  survey_dat2$hunted_trapped_wild_birds == 1|
+   survey_dat2$hunted_trapped_tenrecs == 1 
+)
+
+#Select relevant covariates
+survey_dat2 <- survey_dat2%>% dplyr::select(hunted_trapped, age, season, amount_vanilla_harvested, amount_vanilla_lost, village, house_sol, commercial_goods, gender, crops_vanilla, cert_member, log_commercial, hunted_trapped_bush_pigs, hunted_trapped_carnivores, hunted_trapped_lemurs, hunted_trapped_tenrecs, hunted_trapped_wild_birds, cause_vanilla_lost) %>% drop_na(age)
+
+#Get village dummy variables
+survey_dat2$villageMandena <- survey_dat2$village
+survey_dat2$villageMandena[survey_dat2$villageMandena=="Mandena"] <- 1
+survey_dat2$villageMandena[survey_dat2$villageMandena!="1"] <- 0
+survey_dat2$villageMandena <- as.numeric(survey_dat2$villageMandena)
+survey_dat2$villageSarahandrano <- survey_dat2$village
+survey_dat2$villageSarahandrano[survey_dat2$villageSarahandrano=="Sarahandrano"] <- 1
+survey_dat2$villageSarahandrano[survey_dat2$villageSarahandrano!="1"] <- 0
+survey_dat2$villageSarahandrano <- as.numeric(survey_dat2$villageSarahandrano)
+
+survey_dat2$log_vanilla <- scale(log(survey_dat2$amount_vanilla_harvested+1)) 
+
+survey_dat2$crops_vanilla[survey_dat2$crops_vanilla=="Yes"] <- 1
+survey_dat2$crops_vanilla[survey_dat2$crops_vanilla=="No"] <- 0
+survey_dat2$crops_vanilla <- as.numeric(survey_dat2$crops_vanilla)
+
+#Get dataframe for harvest loss
+survey_dat4 <- survey_dat2 %>% drop_na(amount_vanilla_lost, amount_vanilla_harvested) %>% filter(crops_vanilla==1) 
+
+survey_dat4$log_vanilla_lost <- scale(log(survey_dat4$amount_vanilla_lost+1))
+survey_dat4$vanilla_pct_loss <- survey_dat4$amount_vanilla_lost/(survey_dat4$amount_vanilla_harvested + survey_dat4$amount_vanilla_lost) 
+survey_dat4$log_vanilla_pct_loss <- scale(log(survey_dat4$vanilla_pct_loss+1))
+survey_dat4x <- survey_dat4
+
+
+survey_dat4x$cert_member[survey_dat4x$cert_member=="Yes"] <- 1
+survey_dat4x$cert_member[survey_dat4x$cert_member=="No"] <- 0
+survey_dat4x$cert_member <- as.numeric(survey_dat4x$cert_member)
+survey_dat4x$log_vanilla <- scale(log(survey_dat4x$amount_vanilla_harvested+1))
+
+
+survey_dat6 <- survey_dat2 %>% filter(crops_vanilla==1)
+survey_dat6$log_vanilla <- scale(log(survey_dat6$amount_vanilla_harvested+1)) #variable for amount of vanilla harvested
+survey_dat6$village <- as.factor(survey_dat6$village)
+X <- model.matrix(~ village, data = survey_dat6)[, -1, drop = FALSE]
+colnames(X)
+
+```
+
+```{r Vanilla farmer binary SEM}
+
+survey_dat2$hunted_trapped <- ordered(survey_dat2$hunted_trapped)
+survey_dat2$house_sol      <- as.numeric(survey_dat2$house_sol)
+survey_dat2$hunted_trapped <- as.numeric(survey_dat2$hunted_trapped)-1
+survey_dat2$gender[survey_dat2$gender=="Male"] <- 1
+survey_dat2$gender[survey_dat2$gender=="Female"] <- 0
+survey_dat2$gender <- as.numeric(survey_dat2$gender)
+
+# ---- 1) Define the SEM  ----
+model_multi_binary <- '
+
+  log_commercial ~ a1*crops_vanilla + house_sol +
+                   villageSarahandrano + villageMandena 
+
+  # Outcome: adjusted for the same covariates
+  hunted_trapped ~ b1*log_commercial + c*crops_vanilla + house_sol +
+                   villageSarahandrano + villageMandena + gender + age
+
+  # Effects of crops_vanilla
+  ind_goods_van := a1*b1
+  direct_van    := c
+  total_van     := c + a1*b1
+'
+
+
+# ---- 2) Fit the SEM  ----
+fit_multi_binary <- sem( model_multi_binary, data = survey_dat2,
+           estimator = "WLSMV",
+           ordered = c("hunted_trapped"))
+
+
+# ---- 3) Inspect effects ----
+summary(fit_multi_binary, standardized = TRUE, rsquare = TRUE, fit.measures = TRUE)
+
+obs <- lavInspect(fit_multi_binary, "sampstat")[[1]]
+imp <- lavInspect(fit_multi_binary, "implied")[[1]]
+resid_mat <- obs - imp
+resid_mat
+
+# ---- 4) Plot ----
+pe95_binary <- parameterEstimates(fit_multi_binary, ci = TRUE, level = 0.95)
+pe90_binary <- parameterEstimates(fit_multi_binary, ci = TRUE, level = 0.90)
+pe80_binary <- parameterEstimates(fit_multi_binary, ci = TRUE, level = 0.80)
+
+keep_labs <- c("ind_goods_van", "direct_van", "total_van")
+
+eff95_binary <- pe95_binary %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, est, ci.lower, ci.upper) %>%
+  rename(Estimate = est, CI95_Lower = ci.lower, CI95_Upper = ci.upper)
+
+eff90_binary <- pe90_binary %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI90_Lower = ci.lower, CI90_Upper = ci.upper)
+
+eff80_binary <- pe80_binary %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI80_Lower = ci.lower, CI80_Upper = ci.upper)
+
+eff_df_binary <- eff95_binary %>%
+  left_join(eff90_binary, by = "label") %>%
+  left_join(eff80_binary, by = "label") %>%
+  mutate(
+    Effect = dplyr::recode(label,
+      ind_goods_van = "Indirect:\nGoods",
+      direct_van    = "Direct",
+      total_van     = "Total"
+    ),
+    Effect = factor(Effect, levels = c("Total", "Direct", "Indirect:\nGoods"))
+  )
+
+binary_plot <- ggplot(eff_df_binary, aes(x = Effect, y = Estimate, color = Effect)) +
+  geom_pointrange(aes(ymin = CI95_Lower, ymax = CI95_Upper),
+                  linewidth = 0.5) +
+  geom_pointrange(aes(ymin = CI90_Lower, ymax = CI90_Upper),
+                  linewidth = 1.5) +
+  geom_pointrange(aes(ymin = CI80_Lower, ymax = CI80_Upper),
+                  linewidth = 2.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = NULL,
+       y = "Effect of vanilla farming (binary)") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("black", "black", "purple3"))
+
+
+```
+
+```{r Vanilla Harvest Amount SEM}
+
+survey_dat5 <- survey_dat2 %>% filter(crops_vanilla ==1) %>% drop_na(amount_vanilla_harvested)
+
+survey_dat5$log_vanilla <- as.numeric(scale(survey_dat5$log_vanilla))
+class(survey_dat5$log_vanilla) 
+
+survey_dat5 <- survey_dat5 %>%
+  mutate(
+    cert_member = as.numeric(as.factor(cert_member)) - 1, 
+    gender      = as.numeric(as.factor(gender)) - 1
+  )
+
+# Verify
+table(survey_dat5$cert_member)
+table(survey_dat5$gender)
+
+model_multi <- '
+  # vanilla production
+  log_vanilla    ~ d1*cert_member + house_sol +
+                   villageSarahandrano + villageMandena + gender + age
+
+  # commercial goods
+  log_commercial ~ a1*log_vanilla + g1*cert_member + house_sol +
+                   villageSarahandrano + villageMandena 
+
+  # Outcome
+  hunted_trapped ~ b1*log_commercial + c*log_vanilla + h1*cert_member + house_sol +
+                   villageSarahandrano + villageMandena + gender + age
+
+  # --- Effects of log_vanilla ---
+  ind_goods_van := a1*b1
+  direct_van    := c
+  total_van     := c + a1*b1
+
+  # --- Effects of cert_member ---
+  ind_cert_goods_only := g1*b1
+  ind_cert_van_only   := d1*c
+  ind_cert_van_goods  := d1*a1*b1
+  ind_cert_total      := g1*b1 + d1*c + d1*a1*b1
+  direct_cert         := h1
+  total_cert          := h1 + g1*b1 + d1*c + d1*a1*b1
+'
+
+
+fit_multi <- sem(
+  model_multi,
+  data      = survey_dat5,
+  ordered   = c("hunted_trapped"),
+  estimator = "WLSMV"
+)
+
+
+summary(fit_multi, standardized = TRUE, rsquare = TRUE, fit.measures = TRUE)
+
+obs <- lavInspect(fit_multi, "sampstat")[[1]]
+imp <- lavInspect(fit_multi, "implied")[[1]]
+resid_mat <- obs - imp
+resid_mat
+
+
+# ---- 4) Plot
+pe95 <- parameterEstimates(fit_multi, ci = TRUE, level = 0.95)
+pe90 <- parameterEstimates(fit_multi, ci = TRUE, level = 0.90)
+pe80 <- parameterEstimates(fit_multi, ci = TRUE, level = 0.80)
+
+keep_labs <- c("ind_goods_van","ind_house_van","ind_total_van","direct_van","total_van")
+
+eff95 <- pe95 %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, est, ci.lower, ci.upper) %>%
+  rename(Estimate = est, CI95_Lower = ci.lower, CI95_Upper = ci.upper)
+
+eff90 <- pe90 %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI90_Lower = ci.lower, CI90_Upper = ci.upper)
+
+eff80 <- pe80 %>%
+  filter(label %in% keep_labs) %>%
+ dplyr:: select(label, ci.lower, ci.upper) %>%
+  rename(CI80_Lower = ci.lower, CI80_Upper = ci.upper)
+
+
+keep_labs <- c("ind_goods_van", "direct_van", "total_van")
+
+eff_df <- eff95 %>%
+  left_join(eff90, by = "label") %>%
+  left_join(eff80, by = "label") %>%
+  mutate(
+    Effect = dplyr::recode(label,
+      ind_goods_van  = "Indirect:\nGoods",
+      direct_van     = "Direct",
+      total_van      = "Total"
+    ),
+    Effect = factor(
+      Effect,
+      levels = c("Total", "Direct", "Indirect:\nGoods")
+    )
+  )
+
+harvest_plot <- ggplot(eff_df, aes(x = Effect, y = Estimate, color = Effect)) +
+  geom_pointrange(aes(ymin = CI95_Lower, ymax = CI95_Upper),
+                  linewidth = 0.5) +
+  geom_pointrange(aes(ymin = CI90_Lower, ymax = CI90_Upper),
+                  linewidth = 1.5) +
+  geom_pointrange(aes(ymin = CI80_Lower, ymax = CI80_Upper),
+                  linewidth = 2.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = NULL,
+       y = "Effect of log(vanilla harvest)") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("black", "black", "purple3"))
+
+
+```
+
+```{r Vanilla Harvest Loss SEM}
+
+survey_dat4x$hunted_trapped <- ordered(survey_dat4x$hunted_trapped)
+survey_dat4x$cert_member <- as.numeric(survey_dat4x$cert_member)
+survey_dat4x$gender[survey_dat4x$gender=="Male"] <- 1
+survey_dat4x$gender[survey_dat4x$gender=="Female"] <- 0
+survey_dat4x$gender <- as.numeric(survey_dat4x$gender)
+
+survey_dat4x
+
+# ---- 1) Define the SEM ----
+model_multi_lost <- '
+  # Parallel first-stage
+  log_vanilla_pct_loss ~ d1*cert_member + house_sol +
+                         villageSarahandrano + villageMandena + gender + age
+  log_vanilla          ~ d2*cert_member + house_sol +
+                         villageSarahandrano + villageMandena + gender + age
+  log_vanilla_pct_loss ~~ log_vanilla
+
+  # Second-stage: commercial goods
+  log_commercial ~ a1*log_vanilla_pct_loss + a3*log_vanilla + g1*cert_member +
+                   house_sol + villageSarahandrano + villageMandena
+
+  # Outcome
+  hunted_trapped ~ b1*log_commercial +
+                   c1*log_vanilla_pct_loss + c2*log_vanilla + h1*cert_member +
+                   house_sol + villageSarahandrano + villageMandena + gender + age
+
+  # --- Effects of log_vanilla_pct_loss ---
+  ind_goods_vanloss := a1*b1
+  direct_vanloss    := c1
+  total_vanloss     := c1 + a1*b1
+
+  # --- Effects of log_vanilla ---
+  ind_goods_van := a3*b1
+  direct_van    := c2
+  total_van     := c2 + a3*b1
+
+  # --- Effects of cert_member ---
+  ind_cert_goods_only    := g1*b1
+  ind_cert_vanloss_only  := d1*c1
+  ind_cert_van_only      := d2*c2
+  ind_cert_vanloss_goods := d1*a1*b1
+  ind_cert_van_goods     := d2*a3*b1
+  ind_cert_total         := g1*b1 + d1*c1 + d2*c2 + d1*a1*b1 + d2*a3*b1
+  direct_cert            := h1
+  total_cert             := h1 + g1*b1 + d1*c1 + d2*c2 + d1*a1*b1 + d2*a3*b1
+'
+
+
+# ---- 2) Fit the SEM ----
+fit_multi_lost <- sem(
+  model_multi_lost, data = survey_dat4x,
+           estimator = "WLSMV",
+           ordered = c("hunted_trapped"))
+
+# ---- 3) Inspect effects ----
+summary(fit_multi_lost, standardized = TRUE, rsquare = TRUE, fit.measures = TRUE)
+
+obs <- lavInspect(fit_multi_lost, "sampstat")[[1]]
+imp <- lavInspect(fit_multi_lost, "implied")[[1]]
+resid_mat <- obs - imp
+resid_mat
+
+# ---- 4) Plot ----
+pe95_lost <- parameterEstimates(fit_multi_lost, ci = TRUE, level = 0.95)
+pe90_lost <- parameterEstimates(fit_multi_lost, ci = TRUE, level = 0.90)
+pe80_lost <- parameterEstimates(fit_multi_lost, ci = TRUE, level = 0.80)
+
+keep_labs <- c("ind_goods_vanloss", "direct_vanloss", "total_vanloss")
+
+eff95_lost <- pe95_lost %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, est, ci.lower, ci.upper) %>%
+  rename(Estimate = est, CI95_Lower = ci.lower, CI95_Upper = ci.upper)
+
+eff90_lost <- pe90_lost %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI90_Lower = ci.lower, CI90_Upper = ci.upper)
+
+eff80_lost <- pe80_lost %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI80_Lower = ci.lower, CI80_Upper = ci.upper)
+
+eff_df_lost <- eff95_lost %>%
+  left_join(eff90_lost, by = "label") %>%
+  left_join(eff80_lost, by = "label") %>%
+  mutate(
+    Effect = dplyr::recode(label,
+      ind_goods_vanloss = "Indirect:\nGoods",
+      direct_vanloss    = "Direct",
+      total_vanloss     = "Total"
+    ),
+    Effect = factor(Effect, levels = c("Total", "Direct", "Indirect:\nGoods"))
+  )
+
+lost_plot <- ggplot(eff_df_lost, aes(x = Effect, y = Estimate, color = Effect)) +
+  geom_pointrange(aes(ymin = CI95_Lower, ymax = CI95_Upper),
+                  linewidth = 0.5) +
+  geom_pointrange(aes(ymin = CI90_Lower, ymax = CI90_Upper),
+                  linewidth = 1.5) +
+  geom_pointrange(aes(ymin = CI80_Lower, ymax = CI80_Upper),
+                  linewidth = 2.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = NULL,
+       y = "Effect of % lost vanilla harvest") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("black", "black", "purple3"))
+
+
+```
+
+```{r Vanilla Certification SEM}
+
+survey_dat6$hunted_trapped <- ordered(survey_dat6$hunted_trapped)
+
+survey_dat6$cert_member[survey_dat6$cert_member=="Yes"] <- 1
+survey_dat6$cert_member[survey_dat6$cert_member=="No"] <- 0
+survey_dat6$cert_member <- as.numeric(survey_dat6$cert_member)
+survey_dat6$gender[survey_dat6$gender=="Male"] <- 1
+survey_dat6$gender[survey_dat6$gender=="Female"] <- 0
+survey_dat6$gender <- as.numeric(survey_dat6$gender)
+
+# ---- 1) Define the SEM ----
+model_multi_cert <- '
+  # COmmercial goods
+  log_commercial ~ a1*cert_member + house_sol +
+                   villageSarahandrano + villageMandena
+
+  # Outcome
+  hunted_trapped ~ b1*log_commercial + c*cert_member + house_sol +
+                   villageSarahandrano + villageMandena + gender + age
+
+  # Effects of cert_member
+  ind_goods_cert := a1*b1
+  direct_cert    := c
+  total_cert     := c + a1*b1
+'
+
+
+# ---- 2) Fit the SEM ----
+fit_multi_cert <- sem(
+  model_multi_cert,
+  data      = survey_dat6, estimator = "WLSMV",
+           ordered = c("hunted_trapped"))
+
+
+# ---- 3) Inspect effects ----
+summary(fit_multi_cert, standardized = TRUE, rsquare = TRUE, fit.measures = TRUE)
+
+obs <- lavInspect(fit_multi_cert, "sampstat")[[1]]
+imp <- lavInspect(fit_multi_cert, "implied")[[1]]
+resid_mat <- obs - imp
+resid_mat
+
+# ---- 4) Plot ----
+pe95_cert <- parameterEstimates(fit_multi_cert, ci = TRUE, level = 0.95)
+pe90_cert <- parameterEstimates(fit_multi_cert, ci = TRUE, level = 0.90)
+pe80_cert <- parameterEstimates(fit_multi_cert, ci = TRUE, level = 0.80)
+
+keep_labs <- c("ind_goods_cert", "direct_cert", "total_cert")
+
+eff95_cert <- pe95_cert %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, est, ci.lower, ci.upper) %>%
+  rename(Estimate = est, CI95_Lower = ci.lower, CI95_Upper = ci.upper)
+
+eff90_cert <- pe90_cert %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI90_Lower = ci.lower, CI90_Upper = ci.upper)
+
+eff80_cert <- pe80_cert %>%
+  filter(label %in% keep_labs) %>%
+  dplyr::select(label, ci.lower, ci.upper) %>%
+  rename(CI80_Lower = ci.lower, CI80_Upper = ci.upper)
+
+eff_df_cert <- eff95_cert %>%
+  left_join(eff90_cert, by = "label") %>%
+  left_join(eff80_cert, by = "label") %>%
+  mutate(
+    Effect = dplyr::recode(label,
+      ind_goods_cert = "Indirect:\nGoods",
+      direct_cert    = "Direct",
+      total_cert     = "Total"
+    ),
+    Effect = factor(Effect, levels = c("Total", "Direct", "Indirect:\nGoods"))
+  )
+
+cert_plot <- ggplot(eff_df_cert, aes(x = Effect, y = Estimate, color = Effect)) +
+  geom_pointrange(aes(ymin = CI95_Lower, ymax = CI95_Upper),
+                  linewidth = 0.5) +
+  geom_pointrange(aes(ymin = CI90_Lower, ymax = CI90_Upper),
+                  linewidth = 1.5) +
+  geom_pointrange(aes(ymin = CI80_Lower, ymax = CI80_Upper),
+                  linewidth = 2.5) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = NULL,
+       y = "Effect of vanilla certification") +
+  theme_minimal(base_size = 14) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none"
+  ) +
+  scale_color_manual(values = c("black", "black", "purple3"))
+
+survey_dat2$cer_binary <- survey_dat2$cert_member
+survey_dat2$cer_binary[survey_dat2$cer_binary=="Yes"] <- 1
+survey_dat2$cer_binary[survey_dat2$cer_binary=="No"] <- 0
+survey_dat2$cer_binary <- as.numeric(survey_dat2$cer_binary)
+
+
+```
+
+```{r Binary Plot}
+# --- Settings ---
+goods_var <- "log_commercial"
+vanilla   <- "crops_vanilla"
+outcome   <- "hunted_trapped"
+alpha     <- 0.1
+
+# --- 1) Extract regressions ---
+pe    <- parameterEstimates(fit_multi_binary, standardized = FALSE)
+V     <- vcov(fit_multi_binary)
+edges <- subset(pe, op == "~")
+
+# Drop control variables and all house_sol paths
+drop_from <- c("gender","age","villageSarahandrano","villageMandena","house_sol")
+edges <- edges[!(edges$rhs %in% drop_from), ]
+edges <- edges[edges$lhs != "house_sol", ]
+
+# --- 2) Significance and labels ---
+edges$signif <- edges$pvalue < alpha
+stars <- cut(edges$pvalue,
+             breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+             labels = c("***","**","*","+",""), right = FALSE)
+edges$lab <- paste0(round(edges$est, 2), stars)
+
+# Default styling
+edges$col     <- "black"
+edges$fontcol <- "black"
+edges$pw      <- 1.6
+edges$style   <- "solid"
+
+# Color goods paths purple
+is_goods <- edges$rhs == goods_var | edges$lhs == goods_var
+edges$col[is_goods]     <- "purple3"
+edges$fontcol[is_goods] <- "purple3"
+
+# --- 2b) All paths shown at full opacity ---
+edges$acol     <- edges$col
+edges$afontcol <- edges$fontcol
+
+# --- 3) Nodes ---
+vars <- sort(unique(c(edges$lhs, edges$rhs)))
+labels <- c(
+  log_commercial = "Goods",
+  crops_vanilla  = "Vanilla Farmer\n(Binary)",
+  hunted_trapped = "Hunted/Trapped",
+  cert_member    = "Certification\nMember"
+)
+node_lab <- setNames(vars, vars)
+for (nm in names(labels)) { if (nm %in% vars) node_lab[nm] <- labels[[nm]] }
+
+node_fill   <- setNames(rep("white", length(vars)), vars)
+node_font   <- setNames(rep("black", length(vars)), vars)
+node_border <- setNames(rep("black", length(vars)), vars)
+
+if (goods_var %in% vars) {
+  node_fill[goods_var]   <- "purple3"
+  node_font[goods_var]   <- "white"
+  node_border[goods_var] <- "purple3"
+}
+
+esc <- function(x) gsub('"', '\\"', x)
+
+# --- 4) Build edges (direct only, no indirect arrows) ---
+all_edges <- data.frame(
+  rhs     = edges$rhs,
+  lhs     = edges$lhs,
+  lab     = edges$lab,
+  col     = edges$acol,
+  fontcol = edges$afontcol,
+  pw      = edges$pw,
+  style   = edges$style,
+  dir     = "forward",
+  stringsAsFactors = FALSE
+)
+
+# --- 5) Build DOT & render ---
+dot <- paste0(
+  'digraph G {\n',
+  '  graph [rankdir=LR, splines=spline, nodesep="0.4", ranksep="0.6"];\n',
+  '  node  [shape=box, fontname="Helvetica", style=filled];\n',
+  '  edge  [fontname="Helvetica"];\n',
+  paste(sprintf('  "%s" [label="%s", fillcolor="%s", fontcolor="%s", color="%s"];',
+                vars, esc(unname(node_lab[vars])),
+                unname(node_fill[vars]), unname(node_font[vars]), unname(node_border[vars])),
+        collapse = "\n"), '\n',
+  paste(sprintf(
+    '  "%s" -> "%s" [label="%s", color="%s", fontcolor="%s", penwidth=%s, style="%s", dir="%s"];',
+    all_edges$rhs, all_edges$lhs, esc(all_edges$lab),
+    all_edges$col, all_edges$fontcol, all_edges$pw, all_edges$style, all_edges$dir
+  ), collapse = "\n"),
+  '\n}'
+)
+
+binary_vanilla_path <- grViz(dot)
+
+```
+
+```{r Amount Harvested Plot}
+# --- Settings ---
+goods_var <- "log_commercial"
+vanilla   <- "log_vanilla"
+outcome   <- "hunted_trapped"
+alpha     <- 0.1
+
+# --- 1) Extract regressions ---
+pe    <- parameterEstimates(fit_multi, standardized = FALSE)
+V     <- vcov(fit_multi)
+edges <- subset(pe, op == "~")
+
+# Drop control variables and all house_sol paths
+drop_from <- c("gender","age","villageSarahandrano","villageMandena","house_sol")
+edges <- edges[!(edges$rhs %in% drop_from), ]
+edges <- edges[edges$lhs != "house_sol", ]
+
+# --- 2) Significance and labels ---
+edges$signif <- edges$pvalue < alpha
+stars <- cut(edges$pvalue,
+             breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+             labels = c("***","**","*","+",""), right = FALSE)
+edges$lab <- paste0(round(edges$est, 2), stars)
+
+# Default styling
+edges$col     <- "black"
+edges$fontcol <- "black"
+edges$pw      <- 1.6
+edges$style   <- "solid"
+
+
+# Color goods paths purple
+is_goods <- edges$rhs == goods_var | edges$lhs == goods_var
+edges$col[is_goods]     <- "purple3"
+edges$fontcol[is_goods] <- "purple3"
+
+# --- 2b) All paths shown at full opacity ---
+edges$acol     <- edges$col
+edges$afontcol <- edges$fontcol
+
+# --- 3) Nodes ---
+vars <- sort(unique(c(edges$lhs, edges$rhs)))
+labels <- c(
+  log_commercial = "Goods",
+  log_vanilla    = "log(Vanilla Harvest)",
+  hunted_trapped = "Hunted/Trapped",
+  cert_member    = "Certification\nMember"
+)
+node_lab <- setNames(vars, vars)
+for (nm in names(labels)) { if (nm %in% vars) node_lab[nm] <- labels[[nm]] }
+
+node_fill   <- setNames(rep("white", length(vars)), vars)
+node_font   <- setNames(rep("black", length(vars)), vars)
+node_border <- setNames(rep("black", length(vars)), vars)
+
+if (goods_var %in% vars) {
+  node_fill[goods_var]   <- "purple3"
+  node_font[goods_var]   <- "white"
+  node_border[goods_var] <- "purple3"
+}
+
+esc <- function(x) gsub('"', '\\"', x)
+
+# --- 4) Build edges (direct only, no indirect arrows) ---
+all_edges <- data.frame(
+  rhs     = edges$rhs,
+  lhs     = edges$lhs,
+  lab     = edges$lab,
+  col     = edges$acol,
+  fontcol = edges$afontcol,
+  pw      = edges$pw,
+  style   = edges$style,
+  dir     = "forward",
+  stringsAsFactors = FALSE
+)
+
+# --- 5) Build DOT & render ---
+dot <- paste0(
+  'digraph G {\n',
+  '  graph [rankdir=LR, splines=spline, nodesep="0.4", ranksep="0.6"];\n',
+  '  node  [shape=box, fontname="Helvetica", style=filled];\n',
+  '  edge  [fontname="Helvetica"];\n',
+  paste(sprintf('  "%s" [label="%s", fillcolor="%s", fontcolor="%s", color="%s"];',
+                vars, esc(unname(node_lab[vars])),
+                unname(node_fill[vars]), unname(node_font[vars]), unname(node_border[vars])),
+        collapse = "\n"), '\n',
+  paste(sprintf(
+    '  "%s" -> "%s" [label="%s", color="%s", fontcolor="%s", penwidth=%s, style="%s", dir="%s"];',
+    all_edges$rhs, all_edges$lhs, esc(all_edges$lab),
+    all_edges$col, all_edges$fontcol, all_edges$pw, all_edges$style, all_edges$dir
+  ), collapse = "\n"),
+  '\n}'
+)
+
+amount_vanilla_path <- grViz(dot)
+
+```
+
+```{r Vanilla Lost Plot}
+# --- Settings ---
+goods_var <- "log_commercial"
+vanilla   <- "log_vanilla_pct_loss"
+outcome   <- "hunted_trapped"
+alpha     <- 0.1
+
+# --- 1) Extract regressions ---
+pe    <- parameterEstimates(fit_multi_lost, standardized = FALSE)
+V     <- vcov(fit_multi_lost)
+edges <- subset(pe, op == "~")
+
+# Drop control variables and all house_sol paths
+drop_from <- c("gender","age","villageSarahandrano","villageMandena","house_sol")
+edges <- edges[!(edges$rhs %in% drop_from), ]
+edges <- edges[edges$lhs != "house_sol", ]
+
+# --- 2) Significance and labels ---
+edges$signif <- edges$pvalue < alpha
+stars <- cut(edges$pvalue,
+             breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+             labels = c("***","**","*","+",""), right = FALSE)
+edges$lab <- paste0(round(edges$est, 2), stars)
+
+# Default styling
+edges$col     <- "black"
+edges$fontcol <- "black"
+edges$pw      <- 1.6
+edges$style   <- "solid"
+
+# Color goods paths purple
+is_goods <- edges$rhs == goods_var | edges$lhs == goods_var
+edges$col[is_goods]     <- "purple3"
+edges$fontcol[is_goods] <- "purple3"
+
+# --- 2b) All paths shown at full opacity ---
+edges$acol     <- edges$col
+edges$afontcol <- edges$fontcol
+
+# --- 3) Nodes ---
+vars <- sort(unique(c(edges$lhs, edges$rhs)))
+labels <- c(
+  log_commercial       = "Goods",
+  log_vanilla_pct_loss = "log(Prop.\nVanilla Crop Lost)",
+  hunted_trapped       = "Hunted/Trapped",
+  cert_member          = "Certification\nMember",
+  log_vanilla          = "log(Vanilla Harvest)"
+)
+node_lab <- setNames(vars, vars)
+for (nm in names(labels)) { if (nm %in% vars) node_lab[nm] <- labels[[nm]] }
+
+node_fill   <- setNames(rep("white", length(vars)), vars)
+node_font   <- setNames(rep("black", length(vars)), vars)
+node_border <- setNames(rep("black", length(vars)), vars)
+
+if (goods_var %in% vars) {
+  node_fill[goods_var]   <- "purple3"
+  node_font[goods_var]   <- "white"
+  node_border[goods_var] <- "purple3"
+}
+
+esc <- function(x) gsub('"', '\\"', x)
+
+# --- 4) Build edges (direct only, no indirect arrows) ---
+all_edges <- data.frame(
+  rhs     = edges$rhs,
+  lhs     = edges$lhs,
+  lab     = edges$lab,
+  col     = edges$acol,
+  fontcol = edges$afontcol,
+  pw      = edges$pw,
+  style   = edges$style,
+  dir     = "forward",
+  stringsAsFactors = FALSE
+)
+
+# --- 4b) Add double-headed arrow: Vanilla Harvest <-> Crop Lost ---
+harvest_var <- "log_vanilla"
+
+cov_row <- subset(pe, op == "~~" &
+                    ((lhs == harvest_var & rhs == vanilla) |
+                     (lhs == vanilla & rhs == harvest_var)))
+
+if (nrow(cov_row) > 0) {
+  p   <- cov_row$pvalue[1]
+  st  <- if (is.na(p)) "" else as.character(cut(p,
+            breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+            labels = c("***","**","*","+",""), right = FALSE))
+  cov_lab <- paste0(round(cov_row$est[1], 2), st)
+} else {
+  cov_lab <- ""   # covariance not estimated in model; draw arrow without label
+}
+
+all_edges$constraint <- "true"
+all_edges <- rbind(all_edges, data.frame(
+  rhs        = harvest_var,
+  lhs        = vanilla,
+  lab        = cov_lab,
+  col        = "black",
+  fontcol    = "black",
+  pw         = 1.6,
+  style      = "solid",
+  dir        = "both",
+  constraint = "false",
+  stringsAsFactors = FALSE
+))
+
+# Make sure both nodes are in the node list
+vars <- sort(unique(c(vars, harvest_var, vanilla)))
+for (v in setdiff(vars, names(node_lab)))  node_lab[v]   <- v
+for (v in setdiff(vars, names(node_fill))) {
+  node_fill[v] <- "white"; node_font[v] <- "black"; node_border[v] <- "black"
+}
+for (nm in names(labels)) { if (nm %in% vars) node_lab[nm] <- labels[[nm]] }
+
+# --- 5) Build DOT & render ---
+dot <- paste0(
+  'digraph G {\n',
+  '  graph [rankdir=LR, splines=spline, nodesep="0.4", ranksep="0.6"];\n',
+  '  node  [shape=box, fontname="Helvetica", style=filled];\n',
+  '  edge  [fontname="Helvetica"];\n',
+  paste(sprintf('  "%s" [label="%s", fillcolor="%s", fontcolor="%s", color="%s"];',
+                vars, esc(unname(node_lab[vars])),
+                unname(node_fill[vars]), unname(node_font[vars]), unname(node_border[vars])),
+        collapse = "\n"), '\n',
+  paste(sprintf(
+    '  "%s" -> "%s" [label="%s", color="%s", fontcolor="%s", penwidth=%s, style="%s", dir="%s", constraint=%s];',
+    all_edges$rhs, all_edges$lhs, esc(all_edges$lab),
+    all_edges$col, all_edges$fontcol, all_edges$pw, all_edges$style,
+    all_edges$dir, all_edges$constraint
+  ), collapse = "\n"),
+  '\n}'
+)
+
+lost_vanilla_path <- grViz(dot)
+
+```
+
+```{r Vanilla Certification Plot}
+# --- Settings ---
+goods_var <- "log_commercial"
+vanilla   <- "cert_member"
+outcome   <- "hunted_trapped"
+alpha     <- 0.1
+
+# --- 1) Extract regressions ---
+pe    <- parameterEstimates(fit_multi_cert, standardized = FALSE)
+V     <- vcov(fit_multi_cert)
+edges <- subset(pe, op == "~")
+
+# Drop control variables and all house_sol paths
+drop_from <- c("gender","age","villageSarahandrano","villageMandena","house_sol")
+edges <- edges[!(edges$rhs %in% drop_from), ]
+edges <- edges[edges$lhs != "house_sol", ]
+
+# --- 2) Significance and labels ---
+edges$signif <- edges$pvalue < alpha
+stars <- cut(edges$pvalue,
+             breaks = c(-Inf, 0.001, 0.01, 0.05, 0.1, Inf),
+             labels = c("***","**","*","+",""), right = FALSE)
+edges$lab <- paste0(round(edges$est, 2), stars)
+
+# Default styling
+edges$col     <- "black"
+edges$fontcol <- "black"
+edges$pw      <- 1.6
+edges$style   <- "solid"
+
+# Color goods paths purple
+is_goods <- edges$rhs == goods_var | edges$lhs == goods_var
+edges$col[is_goods]     <- "purple3"
+edges$fontcol[is_goods] <- "purple3"
+
+# --- 2b) All paths shown at full opacity ---
+edges$acol     <- edges$col
+edges$afontcol <- edges$fontcol
+
+# --- 3) Nodes ---
+vars <- sort(unique(c(edges$lhs, edges$rhs)))
+labels <- c(
+  log_commercial = "Goods",
+  cert_member    = "Certification\nMember",
+  hunted_trapped = "Hunted/Trapped"
+)
+node_lab <- setNames(vars, vars)
+for (nm in names(labels)) { if (nm %in% vars) node_lab[nm] <- labels[[nm]] }
+
+node_fill   <- setNames(rep("white", length(vars)), vars)
+node_font   <- setNames(rep("black", length(vars)), vars)
+node_border <- setNames(rep("black", length(vars)), vars)
+
+if (goods_var %in% vars) {
+  node_fill[goods_var]   <- "purple3"
+  node_font[goods_var]   <- "white"
+  node_border[goods_var] <- "purple3"
+}
+
+esc <- function(x) gsub('"', '\\"', x)
+
+# --- 4) Build edges (direct only, no indirect arrows) ---
+all_edges <- data.frame(
+  rhs     = edges$rhs,
+  lhs     = edges$lhs,
+  lab     = edges$lab,
+  col     = edges$acol,
+  fontcol = edges$afontcol,
+  pw      = edges$pw,
+  style   = edges$style,
+  dir     = "forward",
+  stringsAsFactors = FALSE
+)
+
+# --- 5) Build DOT & render ---
+dot <- paste0(
+  'digraph G {\n',
+  '  graph [rankdir=LR, splines=spline, nodesep="0.4", ranksep="0.6"];\n',
+  '  node  [shape=box, fontname="Helvetica", style=filled];\n',
+  '  edge  [fontname="Helvetica"];\n',
+  paste(sprintf('  "%s" [label="%s", fillcolor="%s", fontcolor="%s", color="%s"];',
+                vars, esc(unname(node_lab[vars])),
+                unname(node_fill[vars]), unname(node_font[vars]), unname(node_border[vars])),
+        collapse = "\n"), '\n',
+  paste(sprintf(
+    '  "%s" -> "%s" [label="%s", color="%s", fontcolor="%s", penwidth=%s, style="%s", dir="%s"];',
+    all_edges$rhs, all_edges$lhs, esc(all_edges$lab),
+    all_edges$col, all_edges$fontcol, all_edges$pw, all_edges$style, all_edges$dir
+  ), collapse = "\n"),
+  '\n}'
+)
+
+cert_path <- grViz(dot)
+
+
+
+```
+
+```{r Combine results}
+
+results_binary <- parameterEstimates(fit_multi_binary, standardized = TRUE)
+results_table_binary <- results_binary[, c("lhs", "op", "rhs", "est", "se", "pvalue")]
+results_table_binary$Model <- "Binary"
+
+results_amount <- parameterEstimates(fit_multi, standardized = TRUE)
+results_table_amount <- results_amount[, c("lhs", "op", "rhs", "est", "se", "pvalue")]
+results_table_amount$Model <- "Amount Harvested"
+
+results_cert <- parameterEstimates(fit_multi_cert, standardized = TRUE)
+results_table_cert <- results_cert[, c("lhs", "op", "rhs", "est", "se", "pvalue")]
+results_table_cert$Model <- "Certification Program"
+
+results_lost <- parameterEstimates(fit_multi_lost, standardized = TRUE)
+results_table_lost <- results_lost[, c("lhs", "op", "rhs", "est", "se", "pvalue")]
+results_table_lost$Model <- "Harvest Lost"
+
+results_combined <- rbind(results_table_binary, results_table_amount, results_table_cert, results_table_lost)
+colnames(results_combined) <- c("Dependent Variable", "Operator", "Predictor Variable", "Estimate", "Standard Error", "P-Value", "Model")
+
+results_combined <- results_combined %>% dplyr::select(Model, `Dependent Variable`:`P-Value`)
+
+write.csv(results_combined, "sem_results_combined_final.csv")
+
+```
+
+```{r Combined coefficient plot}
+
+eff_df_cert$Model <- "Certification Program\n(Binary)"
+eff_df$Model      <- "log(Vanilla Harvest)"
+eff_df_lost$Model <- "log(Prop. Vanilla\nCrop Lost)"
+eff_df_binary$Model <- "Vanilla Farmer\n(Binary)"
+
+eff_df_total <- rbind(eff_df_binary,eff_df, eff_df_cert, eff_df_lost)
+eff_df_total$Model <- factor(eff_df_total$Model, levels = c("Vanilla Farmer\n(Binary)",
+  "Certification Program\n(Binary)",
+  "log(Vanilla Harvest)",
+  "log(Prop. Vanilla\nCrop Lost)"
+))
+
+total_plot <- ggplot(eff_df_total[eff_df_total$Effect == "Total", ],
+                     aes(x = Model, y = Estimate)) +
+  geom_pointrange(
+    aes(ymin = CI95_Lower, ymax = CI95_Upper),
+    linewidth = 0.5,
+    position = position_dodge(width = 0.4)
+  ) +geom_pointrange(
+    aes(ymin = CI90_Lower, ymax = CI90_Upper),
+    linewidth = 1,
+    position = position_dodge(width = 0.4)
+  ) +geom_pointrange(
+    aes(ymin = CI80_Lower, ymax = CI80_Upper),
+    linewidth = 1.5,
+    position = position_dodge(width = 0.4)
+  ) +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Model", y = "Estimated Total Effect on\nHunting/Trapping Wildlife") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+indirect_plot <- ggplot(
+  eff_df_total[eff_df_total$Effect == "Indirect:\nGoods", ],
+  aes(x = Model, y = Estimate)
+) +
+  geom_pointrange(
+    aes(ymin = CI95_Lower, ymax = CI95_Upper),
+    linewidth = 0.5,
+    color = "purple3",
+    position = position_dodge(width = 0.4)
+  )  +geom_pointrange(
+    aes(ymin = CI90_Lower, ymax = CI90_Upper),
+    linewidth = 1,
+    color = "purple3",
+    position = position_dodge(width = 0.4)
+  )  + geom_pointrange(
+    aes(ymin = CI80_Lower, ymax = CI80_Upper),
+    linewidth = 1.5,
+    color = "purple3",
+    position = position_dodge(width = 0.4)
+  )  +geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(x = "Model", y = "Estimated Indirect Effect\n(via Commercial Goods)") +
+  theme_minimal(base_size = 14) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        legend.position = "bottom")
+
+vanilla_hunting_coef <- ggarrange(total_plot, indirect_plot, labels = c("a", "b"), ncol = 1)
+
+ggsave("vanilla_hunting_coef4.png", vanilla_hunting_coef,
+       width = 5, height = 9, dpi = 1000)
+
+
+```
+
